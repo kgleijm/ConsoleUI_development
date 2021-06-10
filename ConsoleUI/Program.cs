@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace ConsoleUI
@@ -26,13 +27,13 @@ namespace ConsoleUI
 
         }
 
+        // Option that exists in a menu but always returns default. Meaning no change in state is made.
         class GhostOption : Option
         {
             
-            
             public override T Pick<T>()
             {
-                return default(T);
+                return default;
             }
 
             public GhostOption(string optiontext) : base(optiontext)
@@ -40,23 +41,61 @@ namespace ConsoleUI
                 
             }
         }
+        
 
-        class FunctionalOption<T> : Option
+        // Option that takes a function with no input but returns the result of that function
+        class FunctionalOption<returnType> : Option
         {
-            private Func<T> myFunction; 
+            private Func<returnType> myFunction; 
             
-            public FunctionalOption(string text, Func<T> func) : base(text)
+            public FunctionalOption(string text, Func<returnType> func) : base(text)
             {
                 myFunction = func;
             }
 
-            public override T1 Pick<T1>()
+            public override returnType Pick<returnType>()
             {
                 var result = myFunction();
-                return (T1)(Object)result;
+                return (returnType)(Object)result;
             }
         }
+
+        // Option that, when picked,  executes an action(block of code) passed in the constructor
+        class ActionOption : Option
+        {
+
+            private Action myAction;
             
+            public ActionOption(string text, Action action) : base(text)
+            {
+                myAction = action;
+            }
+
+            public override T Pick<T>()
+            {
+                myAction();
+                return default(T);
+            }
+        }
+        
+        
+        // Abstract class that, when extended, allows a class to be picked as an option
+        abstract class ObjectiveOption : Option
+        {
+            protected ObjectiveOption() : base("")
+            {
+            }
+
+            public abstract override string AsString();
+            
+            public override T Pick<T>()
+            {
+                return (T)(object)this;
+            }
+        }
+        
+        
+        // User Interface menu that lets the user pick an option, while being an option itself to allow for menu navigation
         class Menu : Option
         {
             private List<Option> Options;
@@ -65,15 +104,25 @@ namespace ConsoleUI
             {
                 Options = new List<Option>();
             }
+
+            public Menu(string menuTitle, List<Option> menuOptions) : base(menuTitle)
+            {
+                Options = menuOptions;
+            }
             
             private void Print()
             {
                 Console.Out.WriteLine(AsString());
+                listOptions();
+                Console.Out.WriteLine(" [x] Exit");
+            }
+
+            public void listOptions()
+            {
                 for (int i = 0; i < Options.Count; i++)
                 {
                     Console.Out.WriteLine(" [" + i + "] " + Options[i].AsString());
                 }
-                Console.Out.WriteLine(" [x] Exit");
             }
 
             
@@ -113,51 +162,73 @@ namespace ConsoleUI
 
             public void Start()
             {
-                Pick<Object>();
+                Pick<object>();
             }
         }
         
-        
+        class RandomNumberContainer : ObjectiveOption
+        {
+
+            private int myNumber;
+            private static Random r = new Random();
+            
+            public RandomNumberContainer()
+            {
+                myNumber = r.Next(0,100);
+            }
+            
+            public override string AsString()
+            {
+                return "Random number container containing: " + myNumber;
+            }
+        }
 
         
-
-
+        void printOptionList(List<Option> list)
+        {
+            foreach (var option in list)
+            {
+                Console.Out.WriteLine(option.AsString());
+            }
+        }
 
 
         public static void Main(string[] args)
         {
-            Menu main = new Menu("Main menu");
-            Menu A = new Menu("Menu A");
-            Menu B = new Menu("Menu B");
+            // Creating some test objects
+            List<Option> randomNumberContainers = new List<Option>();
+            for (int i = 0; i < 10; i++)
+            {
+                randomNumberContainers.Add(new RandomNumberContainer());
+            }
             
+            
+            // Instantiating menu objects
+            Menu mainMenu = new Menu("Main menu");
+            Menu A = new Menu("Ghost options A");
+            Menu B = new Menu("Ghost options B");
+            
+            // Instantiating test options
             GhostOption optionA = new GhostOption("Its all");
             GhostOption optionB = new GhostOption("The same");
             
+            // Instantiating functional options
+            ActionOption addRandomNumberContainer = new ActionOption("Add randomNumberContainer", () => randomNumberContainers.Add(new RandomNumberContainer()));
+            FunctionalOption<RandomNumberContainer> chooseRandomNumberContainer = new FunctionalOption<RandomNumberContainer>("choose randomNumberContainer", () => (RandomNumberContainer)randomNumberContainers[new Random().Next(0, randomNumberContainers.Count -1)]);
             
-            FunctionalOption<String> funcReturnStringA = new FunctionalOption<string>("Return \"A\"", () => "I'm printing A, returning after 3 sec");
-            FunctionalOption<String> funcReturnStringB = new FunctionalOption<string>("Return \"B\"", () => "I'm printing B, returning after 3 sec");
-            FunctionalOption<Object> funcPrintString = new FunctionalOption<object>("choose and print String Function",
-                () =>
-                {
-                    Menu choice = new Menu("Pick one");
-                    choice.addOption(funcReturnStringA);
-                    choice.addOption(funcReturnStringB);
-                    String result = choice.Pick<string>();
+            Menu chooseNumberContainerMenu = new Menu("Choose: ", randomNumberContainers);
+            chooseNumberContainerMenu.addOption(chooseRandomNumberContainer);
+            
 
-                    if (result.Equals(default(string)))
-                    {
-                        return null;
-                    }
-                    
-                    Console.Out.WriteLine(result);
-                    Thread.Sleep(3000);
-                    return null;
-                });
             
             
-            main.addOption(A);
-            main.addOption(B);
-            main.addOption(funcPrintString);
+            
+            
+            
+            
+            mainMenu.addOption(A);
+            mainMenu.addOption(B);
+            //main.addOption(actionPrintString);
             
             A.addOption(optionA);
             A.addOption(optionB);
@@ -166,7 +237,7 @@ namespace ConsoleUI
             B.addOption(optionB);
             
             
-            main.Start();
+            mainMenu.Start();
 
 
 
